@@ -100,7 +100,7 @@ A resposta será uma imagem PNG pronta para postar.
 ---
 
 ## 🧑‍💻 Autor
-- Feito por [Seu Nome](https://github.com/seuusuario)
+- Feito por [Filippe Sims](https://github.com/filippesims)
 
 ---
 
