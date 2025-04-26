@@ -77,24 +77,7 @@ app.post('/generate', upload.single('background'), async (req, res) => {
     const boxHeight = 260;
     const verticalOffset = 80; // Quanto mais alto, menor o valor (subir tudo)
     const boxTop = height - boxHeight - verticalOffset;
-    // Caixa arredondada preta translúcida
-    // ctx.save();
-    // ctx.globalAlpha = 0.7;
-    // ctx.fillStyle = '#111';
-    // ctx.beginPath();
-    // ctx.moveTo(padding, boxTop);
-    // ctx.lineTo(width - padding, boxTop);
-    // ctx.quadraticCurveTo(width - padding + 32, boxTop, width - padding + 32, boxTop + 32);
-    // ctx.lineTo(width - padding + 32, height - padding);
-    // ctx.quadraticCurveTo(width - padding + 32, height - padding + 32, width - padding, height - padding + 32);
-    // ctx.lineTo(padding, height - padding + 32);
-    // ctx.quadraticCurveTo(padding - 32, height - padding + 32, padding - 32, height - padding);
-    // ctx.lineTo(padding - 32, boxTop + 32);
-    // ctx.quadraticCurveTo(padding - 32, boxTop, padding, boxTop);
-    // ctx.closePath();
-    // ctx.fill();
-    // ctx.restore();
-
+  
     // Categoria (caixa azul, canto inferior esquerdo)
     ctx.font = 'bold 36px Montserrat';
     const catWidth = ctx.measureText(category).width + 60;
