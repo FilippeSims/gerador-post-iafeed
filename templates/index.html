@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Gerador de Post Instagram - IA Feed</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Gerador de Post Instagram</h1>
+    <form id="postForm">
+      <label>Imagem de Fundo:
+        <input type="file" name="background" accept="image/*">
+      </label>
+      <label>Ou Link da Imagem:
+        <input type="url" name="background_url" placeholder="Cole o link da imagem aqui">
+      </label>
+      <label>Categoria:
+        <input type="text" name="category" value="INTELIGÊNCIA ARTIFICIAL" required>
+      </label>
+      <label>Título:
+        <textarea name="title" rows="3" required></textarea>
+      </label>
+      <button type="submit">Gerar Imagem</button>
+    </form>
+    <div id="preview">
+      <h2>Pré-visualização</h2>
+      <img id="resultImg" src="" alt="Pré-visualização" style="max-width:100%;display:none;"/>
+      <a id="downloadLink" href="#" download="post-instagram.png" style="display:none;">Baixar Imagem</a>
+    </div>
+  </div>
+  <script>
+    document.getElementById('postForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const form = e.target;
+      // Só envia o arquivo se não houver link
+      const data = new FormData();
+      const fileInput = form.background;
+      const urlInput = form.background_url;
+      if (urlInput.value) {
+        data.append('background_url', urlInput.value);
+      } else if (fileInput.files.length > 0) {
+        data.append('background', fileInput.files[0]);
+      } else {
+        alert('Envie uma imagem de fundo ou cole um link.');
+        return;
+      }
+      data.append('category', form.category.value);
+      data.append('title', form.title.value);
+      const res = await fetch('/generate', { method: 'POST', body: data });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const img = document.getElementById('resultImg');
+        img.src = url;
+        img.style.display = 'block';
+        const link = document.getElementById('downloadLink');
+        link.href = url;
+        link.style.display = 'inline-block';
+      }
+    }
+  </script>
+</body>
+</html>
