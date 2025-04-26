@@ -39,7 +39,7 @@ app.post('/generate', upload.single('background'), async (req, res) => {
       backgroundPath = tempFile;
     }
     const width = 1080;
-    const height = 1080;
+    const height = 1350;
 
     // Cria canvas
     const canvas = createCanvas(width, height);
