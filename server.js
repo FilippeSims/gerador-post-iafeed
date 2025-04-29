@@ -25,8 +25,8 @@ const upload = multer({ dest: 'uploads/' });
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 
-// Função para baixar e otimizar imagem
-async function downloadAndOptimizeImage(url) {
+// Função para baixar imagem
+async function downloadImage(url) {
   const cacheKey = `img_${url}`;
   const cachedImage = imageCache.get(cacheKey);
   
@@ -38,7 +38,7 @@ async function downloadAndOptimizeImage(url) {
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
       timeout: 10000,
-      maxContentLength: 50 * 1024 * 1024, // Aumentado para 50MB
+      maxContentLength: 50 * 1024 * 1024,
       headers: {
         'Accept': 'image/*',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -51,7 +51,6 @@ async function downloadAndOptimizeImage(url) {
       throw new Error('URL não retornou uma imagem válida');
     }
 
-    // Retorna o buffer original sem processamento
     imageCache.set(cacheKey, response.data);
     return response.data;
 
@@ -71,10 +70,9 @@ app.post('/generate', upload.single('background'), async (req, res) => {
     const logoPath = path.join(__dirname, 'static', 'logo.png');
 
     // Se não houver arquivo, mas houver URL, baixa a imagem
-    let imageBuffer;
     if (!backgroundPath && background_url) {
       try {
-        imageBuffer = await downloadAndOptimizeImage(background_url);
+        const imageBuffer = await downloadImage(background_url);
         tempFile = path.join(__dirname, 'uploads', `${uuidv4()}.png`);
         fs.writeFileSync(tempFile, imageBuffer);
         backgroundPath = tempFile;
@@ -87,18 +85,14 @@ app.post('/generate', upload.single('background'), async (req, res) => {
     const width = 1080;
     const height = 1350;
 
-    // Cria canvas com configurações de alta qualidade
+    // Cria canvas
     const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext('2d', { alpha: true });
+    const ctx = canvas.getContext('2d');
 
-    // Configurações de alta qualidade para o contexto
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-
-    // Carrega e desenha o background
+    // Carrega a imagem de fundo
     const bgImg = await loadImage(backgroundPath);
     
-    // Calcula o melhor fit mantendo a proporção original
+    // Calcula as dimensões para manter a proporção
     const imgRatio = bgImg.width / bgImg.height;
     const canvasRatio = width / height;
     
@@ -118,7 +112,7 @@ app.post('/generate', upload.single('background'), async (req, res) => {
       y = (height - drawHeight) / 2;
     }
     
-    // Desenha a imagem com alta qualidade
+    // Desenha a imagem de fundo
     ctx.drawImage(bgImg, x, y, drawWidth, drawHeight);
 
     // Gradiente preto de baixo para cima
@@ -129,7 +123,7 @@ app.post('/generate', upload.single('background'), async (req, res) => {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, height * 0.45, width, height * 0.55);
 
-    // Carrega e desenha a logo (maior, canto superior esquerdo)
+    // Carrega e desenha a logo
     if (fs.existsSync(logoPath)) {
       const logoImg = await loadImage(logoPath);
       const logoW = 220;
@@ -140,23 +134,22 @@ app.post('/generate', upload.single('background'), async (req, res) => {
       ctx.restore();
     }
 
-    // Área da categoria e título na parte de baixo
+    // Área da categoria e título
     const padding = 56;
     const boxHeight = 260;
-    const verticalOffset = 80; // Quanto mais alto, menor o valor (subir tudo)
+    const verticalOffset = 80;
     const boxTop = height - boxHeight - verticalOffset;
   
-    // Categoria (caixa azul, canto inferior esquerdo)
+    // Categoria
     ctx.font = 'bold 36px Montserrat';
     const catWidth = ctx.measureText(category).width + 60;
-    // Caixa de categoria arredondada
     ctx.save();
     ctx.fillStyle = '#1677ff';
     ctx.globalAlpha = 0.95;
     const catX = padding + 8;
     const catY = boxTop + 24;
     const catH = 54;
-    const catR = 12; // raio do canto
+    const catR = 12;
     ctx.beginPath();
     ctx.moveTo(catX + catR, catY);
     ctx.lineTo(catX + catWidth - catR, catY);
@@ -174,12 +167,12 @@ app.post('/generate', upload.single('background'), async (req, res) => {
     ctx.font = 'bold 36px Montserrat';
     ctx.fillText(category, padding + 38, boxTop + 64);
 
-    // Título (justificado à esquerda, várias linhas e fonte ajustável)
+    // Título
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     const maxWidth = width - 2 * padding;
-    const maxBoxHeight = boxHeight - 100; // espaço disponível para o título
+    const maxBoxHeight = boxHeight - 100;
     let fontSize = 54;
     let lines = [];
     let fits = false;
@@ -199,14 +192,12 @@ app.post('/generate', upload.single('background'), async (req, res) => {
         }
       }
       lines.push(line.trim());
-      // Se couber no espaço, ok. Se não, diminui a fonte e tenta de novo
       if (lines.length * (fontSize + 2) <= maxBoxHeight) {
         fits = true;
       } else {
         fontSize -= 2;
       }
     }
-    // Desenha as linhas do título justificado
     let titleStartY = boxTop + 80;
     lines.forEach((l, idx) => {
       ctx.fillText(l, padding + 8, titleStartY + idx * (fontSize + 2), maxWidth);
