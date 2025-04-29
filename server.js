@@ -91,7 +91,7 @@ app.post('/generate', upload.single('background'), async (req, res) => {
     if (!backgroundPath && background_url) {
       try {
         imageBuffer = await downloadAndOptimizeImage(background_url);
-        tempFile = path.join(__dirname, 'uploads', `${uuidv4()}.jpg`);
+        tempFile = path.join(__dirname, 'uploads', `${uuidv4()}.png`);
         fs.writeFileSync(tempFile, imageBuffer);
         backgroundPath = tempFile;
       } catch (error) {
@@ -99,12 +99,17 @@ app.post('/generate', upload.single('background'), async (req, res) => {
         return res.status(400).json({ error: 'Erro ao processar imagem de fundo' });
       }
     }
+
     const width = 1080;
     const height = 1350;
 
-    // Cria canvas
+    // Cria canvas com configurações de alta qualidade
     const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: true });
+
+    // Configurações de alta qualidade para o contexto
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     // Carrega e desenha o background
     const bgImg = await loadImage(backgroundPath);
@@ -213,19 +218,19 @@ app.post('/generate', upload.single('background'), async (req, res) => {
 
     if (isApiRequest) {
       // Retorna base64 para API/N8N
-      const buffer = canvas.toBuffer('image/jpeg', { quality: 0.8 });
+      const buffer = canvas.toBuffer('image/png');
       const base64Image = buffer.toString('base64');
       
       res.json({
         success: true,
-        image: `data:image/jpeg;base64,${base64Image}`,
+        image: `data:image/png;base64,${base64Image}`,
         format: 'base64'
       });
     } else {
       // Retorna imagem direta para navegador
-      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Content-Type', 'image/png');
       res.setHeader('Content-Disposition', 'inline');
-      canvas.jpegStream({ quality: 0.8 }).pipe(res);
+      canvas.pngStream().pipe(res);
     }
 
     // Remove arquivos temporários
