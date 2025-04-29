@@ -37,8 +37,8 @@ async function downloadAndOptimizeImage(url) {
   try {
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
-      timeout: 10000, // 10 segundos timeout
-      maxContentLength: 10 * 1024 * 1024, // 10MB max
+      timeout: 10000,
+      maxContentLength: 10 * 1024 * 1024,
       headers: {
         'Accept': 'image/*',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -69,13 +69,6 @@ async function downloadAndOptimizeImage(url) {
       return optimizedBuffer;
     } catch (sharpError) {
       console.error('Erro ao processar imagem com Sharp:', sharpError);
-      
-      // Fallback: tenta usar o buffer original
-      if (response.data && response.data.length > 0) {
-        imageCache.set(cacheKey, response.data);
-        return response.data;
-      }
-      
       throw new Error('Não foi possível processar a imagem');
     }
   } catch (error) {
@@ -86,9 +79,11 @@ async function downloadAndOptimizeImage(url) {
 
 // Endpoint para gerar imagem
 app.post('/generate', upload.single('background'), async (req, res) => {
+  let tempFile = null;
+  let backgroundPath = req.file && req.file.path;
+  
   try {
     const { category, title, background_url } = req.body;
-    let backgroundPath = req.file && req.file.path;
     const logoPath = path.join(__dirname, 'static', 'logo.png');
 
     // Se não houver arquivo, mas houver URL, baixa a imagem
@@ -96,7 +91,7 @@ app.post('/generate', upload.single('background'), async (req, res) => {
     if (!backgroundPath && background_url) {
       try {
         imageBuffer = await downloadAndOptimizeImage(background_url);
-        const tempFile = path.join(__dirname, 'uploads', `${uuidv4()}.jpg`);
+        tempFile = path.join(__dirname, 'uploads', `${uuidv4()}.jpg`);
         fs.writeFileSync(tempFile, imageBuffer);
         backgroundPath = tempFile;
       } catch (error) {
@@ -212,15 +207,49 @@ app.post('/generate', upload.single('background'), async (req, res) => {
     ctx.textAlign = 'start';
     ctx.textBaseline = 'alphabetic';
 
-    // Remove arquivo temporário
-    if (req.file && fs.existsSync(backgroundPath)) fs.unlinkSync(backgroundPath);
-    if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    // Verifica se é uma requisição da API (N8N) ou do navegador
+    const isApiRequest = req.headers['accept']?.includes('application/json') || 
+                        req.headers['x-requested-with'] === 'XMLHttpRequest';
 
-    // Envia imagem
-    res.setHeader('Content-Type', 'image/png');
-    canvas.pngStream().pipe(res);
+    if (isApiRequest) {
+      // Retorna base64 para API/N8N
+      const buffer = canvas.toBuffer('image/jpeg', { quality: 0.8 });
+      const base64Image = buffer.toString('base64');
+      
+      res.json({
+        success: true,
+        image: `data:image/jpeg;base64,${base64Image}`,
+        format: 'base64'
+      });
+    } else {
+      // Retorna imagem direta para navegador
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Content-Disposition', 'inline');
+      canvas.jpegStream({ quality: 0.8 }).pipe(res);
+    }
+
+    // Remove arquivos temporários
+    if (req.file && fs.existsSync(backgroundPath)) {
+      fs.unlinkSync(backgroundPath);
+    }
+    if (tempFile && fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
+    }
+
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    // Limpa arquivos temporários em caso de erro
+    if (req.file && fs.existsSync(backgroundPath)) {
+      fs.unlinkSync(backgroundPath);
+    }
+    if (tempFile && fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
+    }
+    
+    console.error('Erro na geração:', e);
+    res.status(500).json({ 
+      success: false,
+      error: e.message 
+    });
   }
 });
 

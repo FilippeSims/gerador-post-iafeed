@@ -26,17 +26,25 @@
     <div id="preview">
       <h2>Pré-visualização</h2>
       <img id="resultImg" src="" alt="Pré-visualização" style="max-width:100%;display:none;"/>
-      <a id="downloadLink" href="#" download="post-instagram.png" style="display:none;">Baixar Imagem</a>
+      <a id="downloadLink" href="#" download="post-instagram.jpg" style="display:none;">Baixar Imagem</a>
     </div>
   </div>
   <script>
     document.getElementById('postForm').onsubmit = async function(e) {
       e.preventDefault();
       const form = e.target;
-      // Só envia o arquivo se não houver link
+      const previewImg = document.getElementById('resultImg');
+      const downloadLink = document.getElementById('downloadLink');
+      
+      // Limpa preview anterior
+      previewImg.style.display = 'none';
+      downloadLink.style.display = 'none';
+      
+      // Prepara os dados
       const data = new FormData();
       const fileInput = form.background;
       const urlInput = form.background_url;
+      
       if (urlInput.value) {
         data.append('background_url', urlInput.value);
       } else if (fileInput.files.length > 0) {
@@ -45,18 +53,37 @@
         alert('Envie uma imagem de fundo ou cole um link.');
         return;
       }
+      
       data.append('category', form.category.value);
       data.append('title', form.title.value);
-      const res = await fetch('/generate', { method: 'POST', body: data });
-      if (res.ok) {
+      
+      try {
+        const res = await fetch('/generate', { 
+          method: 'POST', 
+          body: data,
+          headers: {
+            'Accept': 'image/jpeg'
+          }
+        });
+        
+        if (!res.ok) {
+          throw new Error('Erro ao gerar imagem');
+        }
+        
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-        const img = document.getElementById('resultImg');
-        img.src = url;
-        img.style.display = 'block';
-        const link = document.getElementById('downloadLink');
-        link.href = url;
-        link.style.display = 'inline-block';
+        
+        // Atualiza preview
+        previewImg.src = url;
+        previewImg.style.display = 'block';
+        
+        // Atualiza link de download
+        downloadLink.href = url;
+        downloadLink.style.display = 'inline-block';
+        
+      } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao gerar imagem. Por favor, tente novamente.');
       }
     }
   </script>
