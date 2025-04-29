@@ -38,7 +38,7 @@ async function downloadAndOptimizeImage(url) {
     const response = await axios.get(url, {
       responseType: 'arraybuffer',
       timeout: 10000,
-      maxContentLength: 10 * 1024 * 1024,
+      maxContentLength: 50 * 1024 * 1024, // Aumentado para 50MB
       headers: {
         'Accept': 'image/*',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -51,26 +51,10 @@ async function downloadAndOptimizeImage(url) {
       throw new Error('URL não retornou uma imagem válida');
     }
 
-    // Tenta processar a imagem com sharp
-    try {
-      const optimizedBuffer = await sharp(response.data)
-        .resize(1080, 1350, { 
-          fit: 'cover', 
-          withoutEnlargement: true,
-          position: 'center'
-        })
-        .jpeg({ 
-          quality: 80,
-          progressive: true
-        })
-        .toBuffer();
+    // Retorna o buffer original sem processamento
+    imageCache.set(cacheKey, response.data);
+    return response.data;
 
-      imageCache.set(cacheKey, optimizedBuffer);
-      return optimizedBuffer;
-    } catch (sharpError) {
-      console.error('Erro ao processar imagem com Sharp:', sharpError);
-      throw new Error('Não foi possível processar a imagem');
-    }
   } catch (error) {
     console.error('Erro ao baixar imagem:', error.message);
     throw new Error(`Erro ao baixar imagem: ${error.message}`);
@@ -113,11 +97,29 @@ app.post('/generate', upload.single('background'), async (req, res) => {
 
     // Carrega e desenha o background
     const bgImg = await loadImage(backgroundPath);
-    // Calcula o melhor fit
-    let scale = Math.max(width / bgImg.width, height / bgImg.height);
-    let x = (width - bgImg.width * scale) / 2;
-    let y = (height - bgImg.height * scale) / 2;
-    ctx.drawImage(bgImg, x, y, bgImg.width * scale, bgImg.height * scale);
+    
+    // Calcula o melhor fit mantendo a proporção original
+    const imgRatio = bgImg.width / bgImg.height;
+    const canvasRatio = width / height;
+    
+    let drawWidth, drawHeight, x, y;
+    
+    if (imgRatio > canvasRatio) {
+      // Imagem mais larga que o canvas
+      drawHeight = height;
+      drawWidth = height * imgRatio;
+      x = (width - drawWidth) / 2;
+      y = 0;
+    } else {
+      // Imagem mais alta que o canvas
+      drawWidth = width;
+      drawHeight = width / imgRatio;
+      x = 0;
+      y = (height - drawHeight) / 2;
+    }
+    
+    // Desenha a imagem com alta qualidade
+    ctx.drawImage(bgImg, x, y, drawWidth, drawHeight);
 
     // Gradiente preto de baixo para cima
     const gradient = ctx.createLinearGradient(0, height, 0, height * 0.45);
