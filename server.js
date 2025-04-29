@@ -4,6 +4,11 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const { createCanvas, loadImage, registerFont } = require('canvas');
+const NodeCache = require('node-cache');
+const sharp = require('sharp');
+
+// Cache de imagens por 1 hora
+const imageCache = new NodeCache({ stdTTL: 3600 });
 
 // Registra a fonte Montserrat
 registerFont(path.join(__dirname, 'static', 'Montserrat-Bold.ttf'), { family: 'Montserrat', weight: 'bold' });
@@ -20,6 +25,65 @@ const upload = multer({ dest: 'uploads/' });
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 
+// Função para baixar e otimizar imagem
+async function downloadAndOptimizeImage(url) {
+  const cacheKey = `img_${url}`;
+  const cachedImage = imageCache.get(cacheKey);
+  
+  if (cachedImage) {
+    return cachedImage;
+  }
+
+  try {
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 10000, // 10 segundos timeout
+      maxContentLength: 10 * 1024 * 1024, // 10MB max
+      headers: {
+        'Accept': 'image/*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+
+    // Verifica se o conteúdo é realmente uma imagem
+    const contentType = response.headers['content-type'];
+    if (!contentType || !contentType.startsWith('image/')) {
+      throw new Error('URL não retornou uma imagem válida');
+    }
+
+    // Tenta processar a imagem com sharp
+    try {
+      const optimizedBuffer = await sharp(response.data)
+        .resize(1080, 1350, { 
+          fit: 'cover', 
+          withoutEnlargement: true,
+          position: 'center'
+        })
+        .jpeg({ 
+          quality: 80,
+          progressive: true
+        })
+        .toBuffer();
+
+      imageCache.set(cacheKey, optimizedBuffer);
+      return optimizedBuffer;
+    } catch (sharpError) {
+      console.error('Erro ao processar imagem com Sharp:', sharpError);
+      
+      // Fallback: tenta usar o buffer original
+      if (response.data && response.data.length > 0) {
+        imageCache.set(cacheKey, response.data);
+        return response.data;
+      }
+      
+      throw new Error('Não foi possível processar a imagem');
+    }
+  } catch (error) {
+    console.error('Erro ao baixar imagem:', error.message);
+    throw new Error(`Erro ao baixar imagem: ${error.message}`);
+  }
+}
+
 // Endpoint para gerar imagem
 app.post('/generate', upload.single('background'), async (req, res) => {
   try {
@@ -28,15 +92,17 @@ app.post('/generate', upload.single('background'), async (req, res) => {
     const logoPath = path.join(__dirname, 'static', 'logo.png');
 
     // Se não houver arquivo, mas houver URL, baixa a imagem
-    let tempFile = null;
+    let imageBuffer;
     if (!backgroundPath && background_url) {
-      const axios = require('axios');
-      const { v4: uuidv4 } = require('uuid');
-      const ext = background_url.split('.').pop().split('?')[0];
-      tempFile = path.join(__dirname, 'uploads', uuidv4() + '.' + ext);
-      const response = await axios.get(background_url, { responseType: 'arraybuffer' });
-      require('fs').writeFileSync(tempFile, response.data);
-      backgroundPath = tempFile;
+      try {
+        imageBuffer = await downloadAndOptimizeImage(background_url);
+        const tempFile = path.join(__dirname, 'uploads', `${uuidv4()}.jpg`);
+        fs.writeFileSync(tempFile, imageBuffer);
+        backgroundPath = tempFile;
+      } catch (error) {
+        console.error('Erro ao baixar imagem:', error);
+        return res.status(400).json({ error: 'Erro ao processar imagem de fundo' });
+      }
     }
     const width = 1080;
     const height = 1350;
