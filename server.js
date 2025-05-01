@@ -18,6 +18,7 @@ const PORT = process.env.PORT || 3006;
 
 app.use(cors());
 app.use(express.static('static'));
+app.use('/uploads', express.static('uploads'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
@@ -214,10 +215,16 @@ app.post('/generate', upload.single('background'), async (req, res) => {
       const buffer = canvas.toBuffer('image/png');
       const base64Image = buffer.toString('base64');
       
+      // Salva a imagem gerada
+      const fileName = `${uuidv4()}.png`;
+      const finalPath = path.join(__dirname, 'uploads', fileName);
+      fs.writeFileSync(finalPath, buffer);
+      
       res.json({
         success: true,
         image: `data:image/png;base64,${base64Image}`,
-        format: 'base64'
+        format: 'base64',
+        url: `/uploads/${fileName}`
       });
     } else {
       // Retorna imagem direta para navegador
@@ -247,6 +254,37 @@ app.post('/generate', upload.single('background'), async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: e.message 
+    });
+  }
+});
+
+// Endpoint para salvar imagem gerada
+app.post('/save-image', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+    }
+
+    const fileExtension = path.extname(req.file.originalname);
+    const fileName = `${uuidv4()}${fileExtension}`;
+    const finalPath = path.join(__dirname, 'uploads', fileName);
+
+    // Move o arquivo para o diretório final
+    fs.renameSync(req.file.path, finalPath);
+
+    // Retorna a URL da imagem salva
+    const imageUrl = `/uploads/${fileName}`;
+    
+    res.json({
+      success: true,
+      url: imageUrl,
+      path: finalPath
+    });
+  } catch (error) {
+    console.error('Erro ao salvar imagem:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
     });
   }
 });
